@@ -1,0 +1,181 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlca.h>
+#include "db.h"
+
+extern void sql_error();
+
+// Simple JSON parsing helpers (for basic JSON structure)
+static int extract_json_string(const char* json, const char* key, char* output, size_t output_size) {
+    char search_key[256];
+    snprintf(search_key, sizeof(search_key), "\"%s\"", key);
+    const char* pos = strstr(json, search_key);
+    if (!pos) return 0;
+    
+    pos = strchr(pos, ':');
+    if (!pos) return 0;
+    pos++; // Skip colon
+    
+    // Skip whitespace
+    while (*pos == ' ' || *pos == '\t') pos++;
+    
+    if (*pos == '"') {
+        pos++; // Skip opening quote
+        const char* end = strchr(pos, '"');
+        if (!end) return 0;
+        size_t len = end - pos;
+        if (len >= output_size) len = output_size - 1;
+        strncpy(output, pos, len);
+        output[len] = '\0';
+        return 1;
+    }
+    return 0;
+}
+
+static int extract_json_int(const char* json, const char* key, int* output) {
+    char search_key[256];
+    snprintf(search_key, sizeof(search_key), "\"%s\"", key);
+    const char* pos = strstr(json, search_key);
+    if (!pos) return 0;
+    
+    pos = strchr(pos, ':');
+    if (!pos) return 0;
+    pos++; // Skip colon
+    
+    // Skip whitespace
+    while (*pos == ' ' || *pos == '\t') pos++;
+    
+    *output = atoi(pos);
+    return 1;
+}
+
+// Execute a SELECT query with bind variables
+void execute_select(const char* sql, const char* json_binds) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char sql_stmt[2000];
+    char bind_email[200];
+    int bind_id;
+    
+    // Output variables
+    int user_id;
+    char username[200];
+    char email[200];
+    char password[500];
+    char created_at[50];
+    EXEC SQL END DECLARE SECTION;
+
+    strncpy(sql_stmt, sql, sizeof(sql_stmt) - 1);
+    sql_stmt[sizeof(sql_stmt) - 1] = '\0';
+
+    // Initialize bind variables
+    bind_email[0] = '\0';
+    bind_id = 0;
+
+    // Parse bind variables from JSON
+    if (json_binds) {
+        extract_json_string(json_binds, "email", bind_email, sizeof(bind_email));
+        extract_json_int(json_binds, "id", &bind_id);
+        if (bind_id == 0) {
+            extract_json_int(json_binds, "user_id", &bind_id);
+        }
+    }
+
+    // Output JSON result to stdout
+    fprintf(stdout, "{\"success\":true,\"rows\":[");
+
+    EXEC SQL WHENEVER SQLERROR DO sql_error();
+
+    int first_row = 1;
+    
+    // Handle different query types
+    if (strstr(sql, "WHERE email = :email") && bind_email[0] != '\0') {
+        EXEC SQL DECLARE c_email CURSOR FOR
+            SELECT user_id, username, email, password, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS')
+            FROM users WHERE email = :bind_email;
+        
+        EXEC SQL OPEN c_email;
+        
+        while (1) {
+            EXEC SQL FETCH c_email INTO :user_id, :username, :email, :password, :created_at;
+            if (sqlca.sqlcode == 100) break; // No more rows
+            if (sqlca.sqlcode != 0) break;
+            
+            if (!first_row) fprintf(stdout, ",");
+            first_row = 0;
+            
+            // Escape JSON strings
+            fprintf(stdout, "{\"USER_ID\":%d,\"USERNAME\":\"%s\",\"EMAIL\":\"%s\",\"PASSWORD\":\"%s\",\"CREATED_AT\":\"%s\"}",
+                   user_id, username, email, password, created_at);
+        }
+        
+        EXEC SQL CLOSE c_email;
+    } 
+    else if ((strstr(sql, "WHERE user_id = :id") || strstr(sql, "WHERE user_id = :user_id")) && bind_id != 0) {
+        EXEC SQL DECLARE c_id CURSOR FOR
+            SELECT user_id, username, email, password, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS')
+            FROM users WHERE user_id = :bind_id;
+        
+        EXEC SQL OPEN c_id;
+        
+        while (1) {
+            EXEC SQL FETCH c_id INTO :user_id, :username, :email, :password, :created_at;
+            if (sqlca.sqlcode == 100) break; // No more rows
+            if (sqlca.sqlcode != 0) break;
+            
+            if (!first_row) fprintf(stdout, ",");
+            first_row = 0;
+            
+            fprintf(stdout, "{\"USER_ID\":%d,\"USERNAME\":\"%s\",\"EMAIL\":\"%s\",\"PASSWORD\":\"%s\",\"CREATED_AT\":\"%s\"}",
+                   user_id, username, email, password, created_at);
+        }
+        
+        EXEC SQL CLOSE c_id;
+    }
+
+    fprintf(stdout, "]}");
+}
+
+// Execute INSERT/UPDATE/DELETE with bind variables
+int execute_dml(const char* sql, const char* json_binds) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char sql_stmt[2000];
+    char bind_username[200];
+    char bind_email[200];
+    char bind_password[500];
+    EXEC SQL END DECLARE SECTION;
+
+    strncpy(sql_stmt, sql, sizeof(sql_stmt) - 1);
+    sql_stmt[sizeof(sql_stmt) - 1] = '\0';
+
+    // Initialize bind variables
+    bind_username[0] = '\0';
+    bind_email[0] = '\0';
+    bind_password[0] = '\0';
+
+    // Parse bind variables from JSON
+    if (json_binds) {
+        extract_json_string(json_binds, "username", bind_username, sizeof(bind_username));
+        extract_json_string(json_binds, "email", bind_email, sizeof(bind_email));
+        extract_json_string(json_binds, "password", bind_password, sizeof(bind_password));
+    }
+
+    EXEC SQL WHENEVER SQLERROR DO sql_error();
+
+    // Handle INSERT INTO users
+    if (strstr(sql, "INSERT INTO users")) {
+        EXEC SQL INSERT INTO users (username, email, password)
+            VALUES (:bind_username, :bind_email, :bind_password);
+    } else {
+        // Generic DML (for future expansion)
+        EXEC SQL EXECUTE IMMEDIATE :sql_stmt;
+    }
+
+    if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403) {
+        return sqlca.sqlcode;
+    }
+
+    EXEC SQL COMMIT;
+    return 0;
+}
+

@@ -1,0 +1,23 @@
+﻿
+Pro*C/C++: Release 23.26.0.0.0 - Production on Mon Jan 5 16:13:25 2026
+Version 23.26.0.0.0
+
+Copyright (c) 1982, 2025, Oracle and/or its affiliates.  All rights reserved.
+
+System default option values taken from: C:\oracle\instantclient_21_13\instantclient_23_0\precomp\admin\pcscfg.cfg
+
+Error at line 1, column 10 in file C:\Users\arnel\Downloads\Side-Projects\try-pr
+o-c\pro-c\proc-oracle-xe-app\src\db\query_runner.pc
+#include <stdio.h>
+.........1
+PCC-S-02015, unable to open include file
+Error at line 2, column 10 in file C:\Users\arnel\Downloads\Side-Projects\try-pr
+o-c\pro-c\proc-oracle-xe-app\src\db\query_runner.pc
+#include <stdlib.h>
+.........1
+PCC-S-02015, unable to open include file
+Error at line 3, column 10 in file C:\Users\arnel\Downloads\Side-Projects\try-pr
+o-c\pro-c\proc-oracle-xe-app\src\db\query_runner.pc
+#include <string.h>
+.........1
+PCC-S-02015, unable to open include file

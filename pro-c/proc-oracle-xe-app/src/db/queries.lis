@@ -1,0 +1,42 @@
+
+Pro*C/C++: Release 23.26.0.0.0 - Production on Mon Jan 5 10:41:40 2026
+Version 23.26.0.0.0
+
+Copyright (c) 1982, 2025, Oracle and/or its affiliates.  All rights reserved.
+
+Error at line 1, column 10 in file C:\Users\arnel\Downloads\Side-Projects\try-p
+ro-c\pro-c\proc-oracle-xe-app\src\db\queries.pc
+     1  #include <stdio.h>
+     1  .........1
+     1  PCC-S-02015, unable to open include file
+Error at line 2, column 10 in file C:\Users\arnel\Downloads\Side-Projects\try-p
+ro-c\pro-c\proc-oracle-xe-app\src\db\queries.pc
+     2  #include <stdlib.h>
+     2  .........1
+     2  PCC-S-02015, unable to open include file
+Error at line 3, column 10 in file C:\Users\arnel\Downloads\Side-Projects\try-p
+ro-c\pro-c\proc-oracle-xe-app\src\db\queries.pc
+     3  #include <string.h>
+     3  .........1
+     3  PCC-S-02015, unable to open include file
+Error at line 10, column 15 in file C:\Users\arnel\Downloads\Side-Projects\try-
+pro-c\pro-c\proc-oracle-xe-app\src\include\db.h
+    10  #endif // DB_H
+    10  ..............1
+    10  PCC-S-02014, Encountered the symbol "<eof>" when expecting one of the f
+        ollowing:
+        
+           ; { } , = : ( ) [ ] * ? | & < > + - / % ~ ! . # @ ^ *= /= %=
+           += -= <<= >>= &&= ||= ^= ~= := | & == != <= >= << >> ++ -- ->
+           ... .. <> ** => an identifier, a string, a numeric constant,
+           newline, a sql string, misc. punctuation, newline, define,
+           elif, else, endif, error, if, ifdef, ifndef, include,
+           include_next, line, pragma, _Pragma, undef, exec, sql, begin,
+           end, var, type, oracle, an immediate preprocessor command,
+           a C token, exec sql, exec sql include, exec sql var,
+           exec sql begin, exec sql end, end-exec, exec sql type,
+           exec oracle, exec oracle else, exec oracle endif,
+           exec oracle begin, a sql hint, create, function, package,
+           procedure, trigger, or, replace, a C++ token,
+        The symbol "newline," was substituted for "<eof>" to continue.
+        

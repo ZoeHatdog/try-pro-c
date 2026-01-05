@@ -10,17 +10,52 @@ export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
     confirmPassword: '',
   });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    
+    if (!isLogin) {
+      if (!formData.name || formData.name.trim().length < 2) {
+        errors.name = 'Name must be at least 2 characters long';
+      }
+      
+      if (formData.password !== formData.confirmPassword) {
+        errors.confirmPassword = 'Passwords do not match';
+      }
+    }
+    
+    if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.email = 'Please provide a valid email address';
+    }
+    
+    if (!formData.password || formData.password.length < 6) {
+      errors.password = 'Password must be at least 6 characters long';
+    }
+    
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccess(null);
+    setFieldErrors({});
     setIsLoading(true);
+
+    // Client-side validation
+    if (!validateForm()) {
+      setIsLoading(false);
+      return;
+    }
 
     try {
       if (isLogin) {
@@ -31,10 +66,13 @@ export default function AuthPage() {
         const response = await authApi.login(loginData);
         
         if (response.success) {
-          // Redirect to home or dashboard
-          router.push('/');
+          // Redirect to success page
+          router.push('/success');
         } else {
-          setError(response.message || 'Login failed');
+          const errorMessage = response.errorCode 
+            ? `${response.message} (Error: ${response.errorCode})`
+            : response.message || 'Login failed';
+          setError(errorMessage);
         }
       } else {
         const registerData: RegisterData = {
@@ -46,25 +84,90 @@ export default function AuthPage() {
         const response = await authApi.register(registerData);
         
         if (response.success) {
-          // Redirect to home or dashboard
-          router.push('/');
+          setSuccess('Account created successfully! Please sign in.');
+          // Reset form and switch to login mode
+          setTimeout(() => {
+            setFormData({
+              name: '',
+              email: formData.email, // Keep email for convenience
+              password: '',
+              confirmPassword: '',
+            });
+            setIsLogin(true);
+            setSuccess(null);
+          }, 2000);
         } else {
-          const errorMessage = response.errors?.join(', ') || response.message || 'Registration failed';
-          setError(errorMessage);
+          // Handle field-specific errors
+          if (response.field && response.errors) {
+            const fieldError = Array.isArray(response.errors) 
+              ? response.errors.join(', ')
+              : response.errors;
+            setFieldErrors({ [response.field]: fieldError });
+          } else if (response.errors && Array.isArray(response.errors)) {
+            // Multiple validation errors
+            const errors: Record<string, string> = {};
+            response.errors.forEach((err: string) => {
+              if (err.toLowerCase().includes('name')) errors.name = err;
+              else if (err.toLowerCase().includes('email')) errors.email = err;
+              else if (err.toLowerCase().includes('password')) errors.password = err;
+            });
+            setFieldErrors(errors);
+            setError(response.errors.join(', '));
+          } else {
+            const errorMessage = response.errorCode 
+              ? `${response.message} (Error Code: ${response.errorCode})`
+              : response.message || 'Registration failed';
+            setError(errorMessage);
+            
+            // Set field-specific error if provided
+            if (response.field) {
+              setFieldErrors({ [response.field]: response.message });
+            }
+          }
         }
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+    } catch (err: any) {
+      let errorMessage = 'An unexpected error occurred';
+      
+      if (err.response?.data) {
+        const data = err.response.data;
+        errorMessage = data.errorCode 
+          ? `${data.message} (Error Code: ${data.errorCode})`
+          : data.message || errorMessage;
+        
+        if (data.field) {
+          setFieldErrors({ [data.field]: data.message });
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: value,
     });
+    // Clear field error when user starts typing
+    if (fieldErrors[name]) {
+      setFieldErrors({
+        ...fieldErrors,
+        [name]: '',
+      });
+    }
+    // Clear general error when user starts typing
+    if (error) {
+      setError(null);
+    }
+    if (success) {
+      setSuccess(null);
+    }
   };
 
   return (
@@ -79,7 +182,12 @@ export default function AuthPage() {
             }`}
           />
           <button
-            onClick={() => setIsLogin(true)}
+            onClick={() => {
+              setIsLogin(true);
+              setError(null);
+              setSuccess(null);
+              setFieldErrors({});
+            }}
             className={`relative z-10 flex-1 rounded-xl py-3 text-sm font-medium transition-colors duration-300 ${
               isLogin
                 ? 'text-white dark:text-zinc-900'
@@ -89,7 +197,12 @@ export default function AuthPage() {
             Sign In
           </button>
           <button
-            onClick={() => setIsLogin(false)}
+            onClick={() => {
+              setIsLogin(false);
+              setError(null);
+              setSuccess(null);
+              setFieldErrors({});
+            }}
             className={`relative z-10 flex-1 rounded-xl py-3 text-sm font-medium transition-colors duration-300 ${
               !isLogin
                 ? 'text-white dark:text-zinc-900'
@@ -115,7 +228,23 @@ export default function AuthPage() {
 
           {error && (
             <div className="mb-4 rounded-xl bg-red-50 p-4 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-400">
-              {error}
+              <div className="flex items-start">
+                <svg className="mr-2 h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+                <span>{error}</span>
+              </div>
+            </div>
+          )}
+
+          {success && (
+            <div className="mb-4 rounded-xl bg-green-50 p-4 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-400">
+              <div className="flex items-start">
+                <svg className="mr-2 h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <span>{success}</span>
+              </div>
             </div>
           )}
 
@@ -135,9 +264,16 @@ export default function AuthPage() {
                   value={formData.name}
                   onChange={handleChange}
                   required={!isLogin}
-                  className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-all focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50 dark:placeholder-zinc-500 dark:focus:border-zinc-50 dark:focus:ring-zinc-50"
+                  className={`w-full rounded-xl border px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 dark:bg-zinc-800 dark:text-zinc-50 dark:placeholder-zinc-500 ${
+                    fieldErrors.name
+                      ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-500 dark:border-red-700 dark:bg-red-900/20 dark:focus:border-red-500'
+                      : 'border-zinc-200 bg-white focus:border-zinc-900 focus:ring-zinc-900 dark:border-zinc-700 dark:focus:border-zinc-50 dark:focus:ring-zinc-50'
+                  }`}
                   placeholder="John Doe"
                 />
+                {fieldErrors.name && (
+                  <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.name}</p>
+                )}
               </div>
             )}
 
@@ -155,9 +291,16 @@ export default function AuthPage() {
                 value={formData.email}
                 onChange={handleChange}
                 required
-                className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-all focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50 dark:placeholder-zinc-500 dark:focus:border-zinc-50 dark:focus:ring-zinc-50"
+                className={`w-full rounded-xl border px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 dark:bg-zinc-800 dark:text-zinc-50 dark:placeholder-zinc-500 ${
+                  fieldErrors.email
+                    ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-500 dark:border-red-700 dark:bg-red-900/20 dark:focus:border-red-500'
+                    : 'border-zinc-200 bg-white focus:border-zinc-900 focus:ring-zinc-900 dark:border-zinc-700 dark:focus:border-zinc-50 dark:focus:ring-zinc-50'
+                }`}
                 placeholder="you@example.com"
               />
+              {fieldErrors.email && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.email}</p>
+              )}
             </div>
 
             <div>
@@ -174,9 +317,16 @@ export default function AuthPage() {
                 value={formData.password}
                 onChange={handleChange}
                 required
-                className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-all focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50 dark:placeholder-zinc-500 dark:focus:border-zinc-50 dark:focus:ring-zinc-50"
+                className={`w-full rounded-xl border px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 dark:bg-zinc-800 dark:text-zinc-50 dark:placeholder-zinc-500 ${
+                  fieldErrors.password
+                    ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-500 dark:border-red-700 dark:bg-red-900/20 dark:focus:border-red-500'
+                    : 'border-zinc-200 bg-white focus:border-zinc-900 focus:ring-zinc-900 dark:border-zinc-700 dark:focus:border-zinc-50 dark:focus:ring-zinc-50'
+                }`}
                 placeholder="••••••••"
               />
+              {fieldErrors.password && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.password}</p>
+              )}
             </div>
 
             {!isLogin && (
@@ -194,9 +344,16 @@ export default function AuthPage() {
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   required={!isLogin}
-                  className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-all focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50 dark:placeholder-zinc-500 dark:focus:border-zinc-50 dark:focus:ring-zinc-50"
+                  className={`w-full rounded-xl border px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 dark:bg-zinc-800 dark:text-zinc-50 dark:placeholder-zinc-500 ${
+                    fieldErrors.confirmPassword
+                      ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-500 dark:border-red-700 dark:bg-red-900/20 dark:focus:border-red-500'
+                      : 'border-zinc-200 bg-white focus:border-zinc-900 focus:ring-zinc-900 dark:border-zinc-700 dark:focus:border-zinc-50 dark:focus:ring-zinc-50'
+                  }`}
                   placeholder="••••••••"
                 />
+                {fieldErrors.confirmPassword && (
+                  <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.confirmPassword}</p>
+                )}
               </div>
             )}
 
@@ -259,7 +416,12 @@ export default function AuthPage() {
             <div className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
               Don't have an account?{' '}
               <button
-                onClick={() => setIsLogin(false)}
+                onClick={() => {
+                  setIsLogin(false);
+                  setError(null);
+                  setSuccess(null);
+                  setFieldErrors({});
+                }}
                 className="font-semibold text-zinc-900 hover:text-zinc-700 dark:text-zinc-50 dark:hover:text-zinc-300"
               >
                 Sign up
@@ -271,7 +433,12 @@ export default function AuthPage() {
             <div className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
               Already have an account?{' '}
               <button
-                onClick={() => setIsLogin(true)}
+                onClick={() => {
+                  setIsLogin(true);
+                  setError(null);
+                  setSuccess(null);
+                  setFieldErrors({});
+                }}
                 className="font-semibold text-zinc-900 hover:text-zinc-700 dark:text-zinc-50 dark:hover:text-zinc-300"
               >
                 Sign in
@@ -283,4 +450,3 @@ export default function AuthPage() {
     </div>
   );
 }
-
