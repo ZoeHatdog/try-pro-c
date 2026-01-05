@@ -1,0 +1,21 @@
+
+Pro*C/C++: Release 23.26.0.0.0 - Production on Mon Jan 5 16:13:25 2026
+Version 23.26.0.0.0
+
+Copyright (c) 1982, 2025, Oracle and/or its affiliates.  All rights reserved.
+
+Error at line 7, column 10 in file C:\Users\arnel\Downloads\Side-Projects\try-p
+ro-c\pro-c\proc-oracle-xe-app\src\db_query_service.pc
+     7  #include <stdio.h>
+     7  .........1
+     7  PCC-S-02015, unable to open include file
+Error at line 8, column 10 in file C:\Users\arnel\Downloads\Side-Projects\try-p
+ro-c\pro-c\proc-oracle-xe-app\src\db_query_service.pc
+     8  #include <stdlib.h>
+     8  .........1
+     8  PCC-S-02015, unable to open include file
+Error at line 9, column 10 in file C:\Users\arnel\Downloads\Side-Projects\try-p
+ro-c\pro-c\proc-oracle-xe-app\src\db_query_service.pc
+     9  #include <string.h>
+     9  .........1
+     9  PCC-S-02015, unable to open include file

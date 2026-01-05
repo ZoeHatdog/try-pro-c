@@ -10,7 +10,9 @@ const register = async (req, res, next) => {
     if (existingUser) {
       return res.status(409).json({
         success: false,
+        errorCode: 'USER_ALREADY_EXISTS',
         message: 'User with this email already exists',
+        field: 'email',
       });
     }
 
@@ -33,6 +35,25 @@ const register = async (req, res, next) => {
       },
     });
   } catch (error) {
+    // Handle database-specific errors
+    if (error.code === 'DUPLICATE_EMAIL') {
+      return res.status(409).json({
+        success: false,
+        errorCode: error.code,
+        message: error.message,
+        field: error.field,
+      });
+    }
+    
+    // Handle database connection errors
+    if (error.code === 'DB_ERROR' || error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+      return res.status(503).json({
+        success: false,
+        errorCode: 'DATABASE_CONNECTION_ERROR',
+        message: 'Unable to connect to database. Please try again later.',
+      });
+    }
+
     next(error);
   }
 };
@@ -46,6 +67,7 @@ const login = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({
         success: false,
+        errorCode: 'INVALID_CREDENTIALS',
         message: 'Invalid email or password',
       });
     }
@@ -55,6 +77,7 @@ const login = async (req, res, next) => {
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
+        errorCode: 'INVALID_CREDENTIALS',
         message: 'Invalid email or password',
       });
     }
@@ -75,6 +98,15 @@ const login = async (req, res, next) => {
       },
     });
   } catch (error) {
+    // Handle database connection errors
+    if (error.code === 'DB_ERROR' || error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+      return res.status(503).json({
+        success: false,
+        errorCode: 'DATABASE_CONNECTION_ERROR',
+        message: 'Unable to connect to database. Please try again later.',
+      });
+    }
+
     next(error);
   }
 };
@@ -93,4 +125,3 @@ module.exports = {
   login,
   logout,
 };
-

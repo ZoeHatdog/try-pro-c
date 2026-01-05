@@ -1,0 +1,55 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlca.h>
+#include "db.h"
+
+void sql_error();
+
+void connect_to_db() {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char username[50];
+    char password[50];
+    char database[100];
+    EXEC SQL END DECLARE SECTION;
+
+    // Get credentials from environment variables or use defaults
+    const char *env_user = getenv("ORACLE_USER");
+    const char *env_pass = getenv("ORACLE_PASSWORD");
+    const char *env_db = getenv("ORACLE_DATABASE");
+
+    strcpy(username, env_user ? env_user : "system");
+    strcpy(password, env_pass ? env_pass : "password");
+    strcpy(database, env_db ? env_db : "localhost:1521/XE");
+
+    EXEC SQL WHENEVER SQLERROR DO sql_error();
+
+    // Print connection messages to stderr (not stdout) to avoid interfering with JSON output
+    fprintf(stderr, "Connecting to Oracle database: %s as %s\n", database, username);
+    EXEC SQL CONNECT :username IDENTIFIED BY :password USING :database;
+
+    if (sqlca.sqlcode != 0) {
+        fprintf(stderr, "Error connecting to the database: %.*s\n", 
+               sqlca.sqlerrm.sqlerrml, sqlca.sqlerrm.sqlerrmc);
+        exit(EXIT_FAILURE);
+    } else {
+        fprintf(stderr, "Connected to the database successfully.\n");
+    }
+}
+
+void disconnect_from_db() {
+    EXEC SQL COMMIT WORK RELEASE;
+
+    if (sqlca.sqlcode != 0) {
+        fprintf(stderr, "Error disconnecting from the database: %s\n", sqlca.sqlerrm.sqlerrmc);
+    } else {
+        fprintf(stderr, "Disconnected from the database successfully.\n");
+    }
+}
+
+void sql_error() {
+    fprintf(stderr, "SQL Error: %.*s\n", sqlca.sqlerrm.sqlerrml, sqlca.sqlerrm.sqlerrmc);
+    EXEC SQL WHENEVER SQLERROR CONTINUE;
+    EXEC SQL ROLLBACK WORK RELEASE;
+    exit(EXIT_FAILURE);
+}

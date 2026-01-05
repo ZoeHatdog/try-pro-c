@@ -1,0 +1,42 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlca.h>
+#include "db.h"
+
+void sql_error();
+
+void execute_query(const char* query) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char query_str[1000];
+    char result[100];
+    EXEC SQL END DECLARE SECTION;
+
+    // Copy the query string into a host variable
+    strncpy(query_str, query, sizeof(query_str) - 1);
+    query_str[sizeof(query_str) - 1] = '\0';
+
+    EXEC SQL WHENEVER SQLERROR CONTINUE;
+
+    EXEC SQL PREPARE stmt FROM :query_str;
+    EXEC SQL DECLARE c_cursor CURSOR FOR stmt;
+    EXEC SQL OPEN c_cursor;
+
+    while (1) {
+        EXEC SQL FETCH c_cursor INTO :result;
+        if (sqlca.sqlcode == 100) {
+            break; // No more rows
+        } else if (sqlca.sqlcode != 0) {
+            printf("Error fetching data: %.*s\n", sqlca.sqlerrm.sqlerrml, sqlca.sqlerrm.sqlerrmc);
+            break;
+        }
+        printf("Result: %s\n", result);
+    }
+
+    EXEC SQL CLOSE c_cursor;
+}
+
+void get_all_records() {
+    const char* query = "SELECT * FROM users";
+    execute_query(query);
+}

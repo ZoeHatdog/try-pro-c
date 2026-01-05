@@ -1,0 +1,24 @@
+/****************************************/
+/* main.pc - Main Pro*C Source File    */
+/****************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlca.h>
+#include "db.h"
+
+void connect_to_db();
+void disconnect_from_db();
+
+int main() {
+    /* Connect to the Oracle XE database */
+    connect_to_db();
+
+    /* Execute queries or main application logic here */
+
+    /* Disconnect from the database */
+    disconnect_from_db();
+
+    return 0;
+}

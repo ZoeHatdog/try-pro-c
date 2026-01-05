@@ -4,7 +4,9 @@ export interface ApiResponse<T> {
   success: boolean;
   message: string;
   data?: T;
-  errors?: string[];
+  errors?: string[] | string;
+  errorCode?: string;
+  field?: string;
 }
 
 export interface AuthResponse {
@@ -53,7 +55,10 @@ class ApiClient {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Request failed');
+        // Create error object with response data
+        const error: any = new Error(data.message || 'Request failed');
+        error.response = { data };
+        throw error;
       }
 
       return data;
@@ -80,4 +85,3 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);
-

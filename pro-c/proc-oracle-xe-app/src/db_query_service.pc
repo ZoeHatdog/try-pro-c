@@ -1,0 +1,106 @@
+/****************************************/
+/* db_query_service.pc - Pro*C Service */
+/* Accepts JSON input via stdin        */
+/* Returns JSON output via stdout      */
+/****************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlca.h>
+#include "db.h"
+
+void connect_to_db();
+void disconnect_from_db();
+void execute_select(const char* sql, const char* json_binds);
+int execute_dml(const char* sql, const char* json_binds);
+
+// Simple JSON parsing - extract SQL and binds
+static void parse_json_request(char* input, char* sql, size_t sql_size, char* binds, size_t binds_size) {
+    // Extract SQL
+    const char* sql_pos = strstr(input, "\"sql\"");
+    if (sql_pos) {
+        sql_pos = strchr(sql_pos, ':');
+        if (sql_pos) {
+            sql_pos = strchr(sql_pos, '"');
+            if (sql_pos) {
+                sql_pos++; // Skip opening quote
+                const char* sql_end = strchr(sql_pos, '"');
+                if (sql_end) {
+                    size_t len = sql_end - sql_pos;
+                    if (len >= sql_size) len = sql_size - 1;
+                    strncpy(sql, sql_pos, len);
+                    sql[len] = '\0';
+                }
+            }
+        }
+    }
+
+    // Extract binds (simplified - get the whole binds object)
+    const char* binds_pos = strstr(input, "\"binds\"");
+    if (binds_pos) {
+        binds_pos = strchr(binds_pos, '{');
+        if (binds_pos) {
+            const char* binds_end = strrchr(binds_pos, '}');
+            if (binds_end) {
+                size_t len = binds_end - binds_pos + 1;
+                if (len >= binds_size) len = binds_size - 1;
+                strncpy(binds, binds_pos, len);
+                binds[len] = '\0';
+            }
+        }
+    }
+}
+
+int main() {
+    char input[4096];
+    char sql[2000];
+    char binds[1000];
+    
+    // Read JSON input from stdin
+    if (fgets(input, sizeof(input), stdin) == NULL) {
+        fprintf(stdout, "{\"success\":false,\"error\":\"No input provided\",\"rows\":[]}\n");
+        return 1;
+    }
+
+    // Remove newline
+    input[strcspn(input, "\n\r")] = '\0';
+
+    // Initialize output strings
+    sql[0] = '\0';
+    binds[0] = '\0';
+
+    // Parse JSON request
+    parse_json_request(input, sql, sizeof(sql), binds, sizeof(binds));
+
+    if (sql[0] == '\0') {
+        fprintf(stdout, "{\"success\":false,\"error\":\"No SQL provided\",\"rows\":[]}\n");
+        return 1;
+    }
+
+    // Connect to database
+    connect_to_db();
+
+    // Determine if SELECT or DML
+    int is_select = (strstr(sql, "SELECT") != NULL || strstr(sql, "select") != NULL);
+
+    if (is_select) {
+        // Execute SELECT query (already includes success:true)
+        execute_select(sql, binds);
+        fprintf(stdout, "\n");
+    } else {
+        // Execute DML (INSERT/UPDATE/DELETE)
+        int result = execute_dml(sql, binds);
+        if (result == 0) {
+            fprintf(stdout, "{\"success\":true,\"error\":null,\"rows\":[]}\n");
+        } else {
+            fprintf(stdout, "{\"success\":false,\"error\":\"SQL error code: %d\",\"rows\":[]}\n", result);
+        }
+    }
+
+    // Disconnect from database
+    disconnect_from_db();
+
+    return 0;
+}
+

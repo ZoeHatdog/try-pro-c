@@ -1,6 +1,5 @@
-# Pro-C Build Script for Windows PowerShell
-# Run with: powershell -ExecutionPolicy Bypass -File .\build.ps1
-# Or: .\build.ps1 (if execution policy allows)
+# Pro-C Build Script for Windows PowerShell - Database Query Service
+# Builds a service executable that accepts JSON input and returns JSON output
 
 $ErrorActionPreference = "Stop"
 
@@ -32,9 +31,8 @@ if (Test-Path $procExe) {
     exit 1
 }
 
-Write-Host "Building Pro-C application..." -ForegroundColor Green
+Write-Host "Building Pro-C Database Query Service..." -ForegroundColor Green
 Write-Host "ORACLE_HOME: $env:ORACLE_HOME" -ForegroundColor Cyan
-Write-Host "PROC_EXE: $procPath" -ForegroundColor Cyan
 
 # Navigate to project root
 Set-Location $PSScriptRoot
@@ -44,9 +42,9 @@ Write-Host ""
 Write-Host "Precompiling Pro-C files..." -ForegroundColor Yellow
 
 $files = @(
-    @{Input="src\main.pc"; Output="src\main.c"},
     @{Input="src\db\connection.pc"; Output="src\db\connection.c"},
-    @{Input="src\db\queries.pc"; Output="src\db\queries.c"}
+    @{Input="src\db\query_runner.pc"; Output="src\db\query_runner.c"},
+    @{Input="src\db_query_service.pc"; Output="src\db_query_service.c"}
 )
 
 foreach ($file in $files) {
@@ -54,22 +52,18 @@ foreach ($file in $files) {
     $inputPath = Join-Path $PSScriptRoot $file.Input
     $outputPath = Join-Path $PSScriptRoot $file.Output
     
-    # Build argument string for proc.exe (using direct call to preserve environment)
+    # Build argument string for proc.exe
     $procArgs = "iname=$inputPath oname=$outputPath mode=ansi lines=yes parse=partial include=`"$sdkInclude`" include=`"$srcInclude`""
     
-    Write-Host "    Command: $procPath $procArgs" -ForegroundColor DarkGray
-    
     try {
-        # Call proc.exe directly to preserve environment variables
         & $procPath $procArgs.Split(' ') 2>&1 | Out-File "$outputPath.log" -Encoding utf8
         $exitCode = $LASTEXITCODE
         
-        # Check if output file was created (this is what matters, not exit code)
+        # Check if output file was created
         $fileCreated = Test-Path $outputPath
         
         if (-not $fileCreated) {
             Write-Host "Error precompiling $($file.Input)!" -ForegroundColor Red
-            Write-Host "Exit code: $exitCode" -ForegroundColor Red
             if (Test-Path "$outputPath.log") {
                 $logContent = Get-Content "$outputPath.log" -ErrorAction SilentlyContinue
                 if ($logContent) {
@@ -80,30 +74,23 @@ foreach ($file in $files) {
             exit 1
         } else {
             Write-Host "    Success" -ForegroundColor Green
-            if ($exitCode -ne 0) {
-                Write-Host "    Note: proc.exe returned exit code $exitCode but .c file was created" -ForegroundColor DarkGray
-            }
         }
     } catch {
         Write-Host "Exception: $_" -ForegroundColor Red
-        Write-Host $_.Exception.Message -ForegroundColor Red
         exit 1
     }
 }
 
 Write-Host "Precompilation successful!" -ForegroundColor Green
 
-# Compile C files (requires gcc)
+# Compile C files
 Write-Host ""
 Write-Host "Compiling C files..." -ForegroundColor Yellow
 
-# Set gcc path (64-bit version)
 $gccPath = "C:\Users\arnel\Downloads\winlibs-x86_64-posix-seh-gcc-15.2.0-mingw-w64ucrt-13.0.0-r5\mingw64\bin\gcc.exe"
 
-# Check if gcc exists
 if (-not (Test-Path $gccPath)) {
     Write-Host "Error: gcc not found at: $gccPath" -ForegroundColor Red
-    Write-Host "Please verify the path is correct." -ForegroundColor Yellow
     exit 1
 }
 
@@ -145,9 +132,11 @@ Write-Host "Compilation successful!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Linking executable..." -ForegroundColor Yellow
 
+$serviceExe = Join-Path $PSScriptRoot "db_query_service.exe"
+
 $linkArgs = @(
     $objectFiles
-    "-o", "$PSScriptRoot\app.exe",
+    "-o", $serviceExe,
     "-L$sdkLib",
     "-loci"
 )
@@ -168,4 +157,7 @@ try {
 
 Write-Host ""
 Write-Host "Build completed successfully!" -ForegroundColor Green
-Write-Host "Run with: .\app.exe" -ForegroundColor Cyan
+Write-Host "Service executable: db_query_service.exe" -ForegroundColor Cyan
+Write-Host "Usage: echo '{\"sql\":\"SELECT ...\",\"binds\":{...}}' | .\db_query_service.exe" -ForegroundColor Cyan
+
+
